@@ -1,0 +1,2492 @@
+=======================================================
+   BLOOD DONATION APP - COMPLETE SOURCE CODE
+=======================================================
+FILE: lib/features/auth/presentation/providers/local_auth_provider.dart
+----------------------------------------
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../rbac/models/app_role.dart';
+import '../../../../shared/services/user_model.dart';
+import '../../../../shared/services/local_user_service.dart';
+
+final localAuthServiceProvider = Provider<LocalUserService>((ref) => LocalUserService());
+
+final localAuthStateProvider = StateNotifierProvider<LocalAuthNotifier, AsyncValue<User?>>((ref) {
+  return LocalAuthNotifier(ref.read(localAuthServiceProvider));
+});
+
+class LocalAuthNotifier extends StateNotifier<AsyncValue<User?>> {
+  final LocalUserService _userService;
+
+  LocalAuthNotifier(this._userService) : super(const AsyncValue<User?>.loading()) {
+    _checkAuthState();
+  }
+
+  Future<void> _checkAuthState() async {
+    state = const AsyncValue<User?>.loading();
+    final result = await _userService.getCurrentUser();
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> register(String phone, AppRole role) async {
+    state = const AsyncValue<User?>.loading();
+    final result = await _userService.register(phone, role);
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> login(String phone) async {
+    state = const AsyncValue<User?>.loading();
+    final result = await _userService.login(phone);
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> updateRole(AppRole role) async {
+    final result = await _userService.updateRole(role);
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> updateProfile({String? name, String? bloodType, bool? isAvailable}) async {
+    final result = await _userService.updateProfile(
+      name: name,
+      bloodType: bloodType,
+      isAvailable: isAvailable,
+    );
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> updateVerificationStatus(VerificationStatus status) async {
+    final result = await _userService.updateVerificationStatus(status);
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+
+  Future<void> signOut() async {
+    await _userService.logout();
+    state = const AsyncValue<User?>.data(null);
+  }
+
+  Future<void> refreshUser() async {
+    final result = await _userService.getCurrentUser();
+    result.fold(
+      (failure) => state = AsyncValue<User?>.error(failure, StackTrace.current),
+      (user) => state = AsyncValue<User?>.data(user),
+    );
+  }
+}
+
+final phoneVerificationIdProvider = StateProvider<String?>((ref) => null);
+final otpSentProvider = StateProvider<bool>((ref) => false);
+
+FILE: lib/features/auth/presentation/screens/login_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/router/app_routes.dart';
+import '../providers/local_auth_provider.dart';
+
+class LoginScreen extends ConsumerStatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
+  final _phoneController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  late AnimationController _shakeController;
+  late Animation<double> _shakeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shakeController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _shakeAnimation = Tween<double>(begin: 0, end: 10).animate(
+      CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
+    );
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _shakeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    await ref.read(localAuthStateProvider.notifier).login(_phoneController.text);
+
+    setState(() => _isLoading = false);
+
+    final authState = ref.read(localAuthStateProvider);
+    
+    authState.when(
+      data: (user) {
+        if (user != null) {
+          if (user.role.name == 'donor' || user.role.name == 'receiver') {
+            context.go(AppRoutes.roleSelection);
+          } else {
+            context.go(AppRoutes.verificationPending);
+          }
+        } else {
+          _shakeController.forward().then((_) => _shakeController.reset());
+        }
+      },
+      loading: () {},
+      error: (_, _) {
+        _shakeController.forward().then((_) => _shakeController.reset());
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: AnimatedBuilder(
+          animation: _shakeAnimation,
+          builder: (context, child) {
+            return Transform.translate(
+              offset: Offset(_shakeAnimation.value * ( _shakeController.isAnimating ? 1 : 0), 0),
+              child: child,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Spacer(),
+                  Icon(Icons.bloodtype, size: 80, color: AppColors.primary),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'BloodDonate',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Donate Blood, Save Lives',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                  const Spacer(),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      hintText: '+91 9876543210',
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      if (value.length < 10) {
+                        return 'Please enter a valid phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Login'),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextButton(
+                    onPressed: () => context.push(AppRoutes.register),
+                    child: const Text("Don't have an account? Register"),
+                  ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+FILE: lib/features/auth/presentation/screens/register_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/router/app_routes.dart';
+import '../../../../rbac/models/app_role.dart';
+import '../providers/local_auth_provider.dart';
+
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key});
+
+  @override
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  final _phoneController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _otpSent = false;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendOTP() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() {
+      _isLoading = false;
+      _otpSent = true;
+    });
+  }
+
+  Future<void> _verifyAndRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    await ref.read(localAuthStateProvider.notifier).register(_phoneController.text, AppRole.donor);
+
+    setState(() => _isLoading = false);
+
+    if (mounted) {
+      final authState = ref.read(localAuthStateProvider);
+      authState.when(
+        data: (user) {
+          if (user != null) {
+            context.go(AppRoutes.roleSelection);
+          }
+        },
+        loading: () {},
+        error: (_, _) {},
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Register')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_otpSent) ...[
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      hintText: '+91 9876543210',
+                      prefixIcon: Icon(Icons.phone),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Required';
+                      if (value.length < 10) return 'Invalid number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _sendOTP,
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Send OTP'),
+                  ),
+                ] else ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.check_circle, color: AppColors.success, size: 48),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text('OTP sent to ${_phoneController.text}', style: Theme.of(context).textTheme.bodyLarge),
+                          const SizedBox(height: AppSpacing.sm),
+                          const Text('Use any 6-digit code to verify', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _verifyAndRegister,
+                    child: _isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Verify & Register'),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextButton(
+                    onPressed: () => setState(() => _otpSent = false),
+                    child: const Text('Change Phone Number'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+FILE: lib/features/auth/presentation/screens/role_selection_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_radius.dart';
+import '../../../../core/router/app_routes.dart';
+import '../../../../rbac/models/app_role.dart';
+import '../providers/local_auth_provider.dart';
+
+class RoleSelectionScreen extends ConsumerStatefulWidget {
+  const RoleSelectionScreen({super.key});
+
+  @override
+  ConsumerState<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+}
+
+class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
+  AppRole? _selectedRole;
+  bool _isLoading = false;
+
+  Future<void> _continue() async {
+    if (_selectedRole == null) return;
+
+    setState(() => _isLoading = true);
+    await ref.read(localAuthStateProvider.notifier).updateRole(_selectedRole!);
+    setState(() => _isLoading = false);
+
+    if (mounted) {
+      context.go(AppRoutes.verificationPending);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Select Your Role')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: AppSpacing.lg),
+              Text('I want to', style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+              const SizedBox(height: AppSpacing.xl),
+              _RoleCard(
+                icon: Icons.bloodtype,
+                title: 'Donate Blood',
+                description: 'Help save lives by donating blood',
+                isSelected: _selectedRole == AppRole.donor,
+                onTap: () => setState(() => _selectedRole = AppRole.donor),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _RoleCard(
+                icon: Icons.person_search,
+                title: 'Request Blood',
+                description: 'Post a request when you need blood',
+                isSelected: _selectedRole == AppRole.receiver,
+                onTap: () => setState(() => _selectedRole = AppRole.receiver),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _selectedRole == null || _isLoading ? null : _continue,
+                child: _isLoading
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Continue'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _RoleCard({required this.icon, required this.title, required this.description, required this.isSelected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: isSelected ? AppColors.primary : Colors.transparent, width: 2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.grey.shade200,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: isSelected ? Colors.white : Colors.grey, size: 32),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: isSelected ? AppColors.primary : null)),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(description, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                ],
+              ),
+            ),
+            if (isSelected) const Icon(Icons.check_circle, color: AppColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+FILE: lib/shared/services/local_admin_service.dart
+----------------------------------------
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
+import '../../core/errors/failures.dart';
+import '../../rbac/models/app_role.dart';
+import 'user_model.dart';
+
+class LocalAdminService {
+  final Map<String, User> _users = {};
+
+  void seedDemoUsers() {
+    if (_users.isEmpty) {
+      final now = DateTime.now();
+      _users['user_1'] = User(
+        uid: 'user_1',
+        phone: '+919876543210',
+        role: AppRole.donor,
+        verificationStatus: VerificationStatus.verified,
+        createdAt: now.subtract(const Duration(days: 30)),
+        updatedAt: now,
+        name: 'John Donor',
+        bloodType: 'A+',
+        isAvailable: true,
+        isBanned: false,
+      );
+      _users['user_2'] = User(
+        uid: 'user_2',
+        phone: '+919876543211',
+        role: AppRole.receiver,
+        verificationStatus: VerificationStatus.pending,
+        createdAt: now.subtract(const Duration(days: 15)),
+        updatedAt: now,
+        name: 'Jane Receiver',
+        bloodType: 'O-',
+        isBanned: false,
+      );
+      _users['user_3'] = User(
+        uid: 'user_3',
+        phone: '+919876543212',
+        role: AppRole.donor,
+        verificationStatus: VerificationStatus.rejected,
+        createdAt: now.subtract(const Duration(days: 5)),
+        updatedAt: now,
+        name: 'Bob Smith',
+        bloodType: 'B+',
+        isBanned: false,
+      );
+      _users['user_4'] = User(
+        uid: 'user_4',
+        phone: '+919876543213',
+        role: AppRole.verifier,
+        verificationStatus: VerificationStatus.verified,
+        createdAt: now.subtract(const Duration(days: 60)),
+        updatedAt: now,
+        name: 'Alice Verifier',
+        isBanned: false,
+      );
+      _users['user_5'] = User(
+        uid: 'user_5',
+        phone: '+919876543214',
+        role: AppRole.admin,
+        verificationStatus: VerificationStatus.verified,
+        createdAt: now.subtract(const Duration(days: 90)),
+        updatedAt: now,
+        name: 'Admin User',
+        isBanned: false,
+      );
+    }
+  }
+
+  Future<Either<Failure, List<User>>> getAllUsers({String? role, String? status}) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    var users = _users.values.toList();
+    
+    if (role != null && role.isNotEmpty) {
+      users = users.where((u) => u.role.name == role).toList();
+    }
+    
+    if (status != null && status.isNotEmpty) {
+      users = users.where((u) => u.verificationStatus.name == status).toList();
+    }
+    
+    users.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Right(users);
+  }
+
+  Future<Either<Failure, User>> banUser(String uid) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    final user = _users[uid];
+    if (user == null) {
+      return const Left(NotFoundFailure('User not found'));
+    }
+    
+    final updated = user.copyWith(isBanned: true, updatedAt: DateTime.now());
+    _users[uid] = updated;
+    return Right(updated);
+  }
+
+  Future<Either<Failure, User>> unbanUser(String uid) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    final user = _users[uid];
+    if (user == null) {
+      return const Left(NotFoundFailure('User not found'));
+    }
+    
+    final updated = user.copyWith(isBanned: false, updatedAt: DateTime.now());
+    _users[uid] = updated;
+    return Right(updated);
+  }
+
+  Future<Either<Failure, Map<String, dynamic>>> getStats() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    
+    final totalUsers = _users.length;
+    final pendingVerifs = _users.values.where((u) => u.verificationStatus == VerificationStatus.pending).length;
+    final verifiedUsers = _users.values.where((u) => u.verificationStatus == VerificationStatus.verified).length;
+    final bannedUsers = _users.values.where((u) => u.isBanned).length;
+    final donors = _users.values.where((u) => u.role == AppRole.donor).length;
+    final receivers = _users.values.where((u) => u.role == AppRole.receiver).length;
+    
+    return Right({
+      'totalUsers': totalUsers,
+      'pendingVerifications': pendingVerifs,
+      'verifiedUsers': verifiedUsers,
+      'bannedUsers': bannedUsers,
+      'donors': donors,
+      'receivers': receivers,
+    });
+  }
+
+  List<User> get users => _users.values.toList();
+}
+
+final localAdminServiceProvider = Provider<LocalAdminService>((ref) {
+  final service = LocalAdminService();
+  service.seedDemoUsers();
+  return service;
+});
+
+FILE: lib/features/dashboard/presentation/admin/screens/admin_dashboard_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../shared/services/local_admin_service.dart';
+import '../../../../../shared/services/user_model.dart';
+
+final adminUsersProvider = FutureProvider<List<User>>((ref) async {
+  final service = ref.read(localAdminServiceProvider);
+  final result = await service.getAllUsers();
+  return result.fold((l) => [], (r) => r);
+});
+
+final adminStatsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final service = ref.read(localAdminServiceProvider);
+  final result = await service.getStats();
+  return result.fold((l) => {}, (r) => r);
+});
+
+class AdminDashboardScreen extends ConsumerWidget {
+  const AdminDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(adminStatsProvider);
+    final usersAsync = ref.watch(adminUsersProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Admin Dashboard')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              statsAsync.when(
+                data: (stats) => _StatsGrid(stats: stats),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Text('Error: $e'),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('User Management', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.md),
+              usersAsync.when(
+                data: (users) => ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: users.length,
+                  itemBuilder: (context, index) => _UserCard(user: users[index]),
+                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Text('Error: $e'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatsGrid extends StatelessWidget {
+  final Map<String, dynamic> stats;
+
+  const _StatsGrid({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: AppSpacing.md,
+      crossAxisSpacing: AppSpacing.md,
+      childAspectRatio: 1.5,
+      children: [
+        _StatCard(title: 'Total Users', value: '${stats['totalUsers'] ?? 0}', icon: Icons.people, color: AppColors.secondary),
+        _StatCard(title: 'Pending', value: '${stats['pendingVerifications'] ?? 0}', icon: Icons.pending, color: AppColors.warning),
+        _StatCard(title: 'Verified', value: '${stats['verifiedUsers'] ?? 0}', icon: Icons.verified, color: AppColors.success),
+        _StatCard(title: 'Donors', value: '${stats['donors'] ?? 0}', icon: Icons.bloodtype, color: AppColors.primary),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({required this.title, required this.value, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: AppSpacing.xs),
+            Text(value, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UserCard extends ConsumerWidget {
+  final User user;
+
+  const _UserCard({required this.user});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: _getStatusColor().withValues(alpha: 0.1),
+          child: Icon(Icons.person, color: _getStatusColor()),
+        ),
+        title: Row(
+          children: [
+            Text(user.name ?? user.phone),
+            if (user.isBanned) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(4)),
+                child: const Text('BANNED', style: TextStyle(color: Colors.white, fontSize: 10)),
+              ),
+            ],
+          ],
+        ),
+        subtitle: Text('${user.role.displayName} • ${user.verificationStatus.displayName}'),
+        trailing: PopupMenuButton(
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'ban',
+              child: Row(
+                children: [
+                  Icon(user.isBanned ? Icons.lock_open : Icons.block, size: 20),
+                  const SizedBox(width: 8),
+                  Text(user.isBanned ? 'Unban' : 'Ban'),
+                ],
+              ),
+            ),
+          ],
+          onSelected: (value) async {
+            final service = ref.read(localAdminServiceProvider);
+            if (value == 'ban') {
+              if (user.isBanned) {
+                await service.unbanUser(user.uid);
+              } else {
+                await service.banUser(user.uid);
+              }
+              ref.invalidate(adminUsersProvider);
+              ref.invalidate(adminStatsProvider);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor() {
+    switch (user.verificationStatus) {
+      case VerificationStatus.verified:
+        return AppColors.success;
+      case VerificationStatus.pending:
+      case VerificationStatus.inReview:
+        return AppColors.warning;
+      case VerificationStatus.rejected:
+        return AppColors.error;
+    }
+  }
+}
+
+FILE: lib/features/verification/data/verification_provider.dart
+----------------------------------------
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
+import '../../../core/errors/failures.dart';
+import '../../../shared/services/local_verification_service.dart';
+import '../../../shared/services/verification_model.dart';
+
+final localVerificationServiceProvider = Provider<LocalVerificationService>((ref) => LocalVerificationService());
+
+final verificationProvider = StateNotifierProvider<VerificationNotifier, VerificationState>((ref) {
+  return VerificationNotifier(ref.read(localVerificationServiceProvider), ref);
+});
+
+class VerificationState {
+  final String? idFrontUrl;
+  final String? idBackUrl;
+  final String? selfieUrl;
+  final String? medicalDocUrl;
+  final bool isLoading;
+  final String? error;
+  final bool submitted;
+
+  const VerificationState({
+    this.idFrontUrl,
+    this.idBackUrl,
+    this.selfieUrl,
+    this.medicalDocUrl,
+    this.isLoading = false,
+    this.error,
+    this.submitted = false,
+  });
+
+  VerificationState copyWith({String? idFrontUrl, String? idBackUrl, String? selfieUrl, String? medicalDocUrl, bool? isLoading, String? error, bool? submitted}) {
+    return VerificationState(
+      idFrontUrl: idFrontUrl ?? this.idFrontUrl,
+      idBackUrl: idBackUrl ?? this.idBackUrl,
+      selfieUrl: selfieUrl ?? this.selfieUrl,
+      medicalDocUrl: medicalDocUrl ?? this.medicalDocUrl,
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+      submitted: submitted ?? this.submitted,
+    );
+  }
+}
+
+class VerificationNotifier extends StateNotifier<VerificationState> {
+  final LocalVerificationService _verificationService;
+
+  VerificationNotifier(this._verificationService, Ref ref) : super(const VerificationState());
+
+  void setIdFront(String url) => state = state.copyWith(idFrontUrl: url);
+  void setIdBack(String url) => state = state.copyWith(idBackUrl: url);
+  void setSelfie(String url) => state = state.copyWith(selfieUrl: url);
+  void setMedicalDoc(String url) => state = state.copyWith(medicalDocUrl: url);
+
+  Future<void> submitVerification(String uid, String role) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    final result = await _verificationService.submitVerification(
+      uid: uid,
+      role: role,
+      idFrontUrl: state.idFrontUrl,
+      idBackUrl: state.idBackUrl,
+      selfieUrl: state.selfieUrl,
+      medicalDocUrl: state.medicalDocUrl,
+    );
+
+    result.fold(
+      (failure) => state = state.copyWith(isLoading: false, error: failure.message),
+      (verification) {
+        state = state.copyWith(isLoading: false, submitted: true);
+      },
+    );
+  }
+
+  void reset() => state = const VerificationState();
+}
+
+final pendingVerificationsProvider = FutureProvider<List<Verification>>((ref) async {
+  final service = ref.read(localVerificationServiceProvider);
+  final result = await service.getPendingVerifications();
+  return result.fold((l) => [], (r) => r);
+});
+
+final verificationActionsProvider = Provider<VerificationActions>((ref) {
+  return VerificationActions(ref.read(localVerificationServiceProvider), ref);
+});
+
+class VerificationActions {
+  final LocalVerificationService _service;
+  final Ref _ref;
+
+  VerificationActions(this._service, this._ref);
+
+  Future<Either<Failure, Verification>> approve(String uid, String reviewerId) async {
+    final result = await _service.approveVerification(uid, reviewerId);
+    result.fold(
+      (failure) => null,
+      (verification) {
+        _ref.invalidate(pendingVerificationsProvider);
+      },
+    );
+    return result;
+  }
+
+  Future<Either<Failure, Verification>> reject(String uid, String reason, String reviewerId) async {
+    final result = await _service.rejectVerification(uid, reason, reviewerId);
+    result.fold(
+      (failure) => null,
+      (verification) {
+        _ref.invalidate(pendingVerificationsProvider);
+      },
+    );
+    return result;
+  }
+
+  Future<Either<Failure, Verification>> requestInfo(String uid, String message) async {
+    final result = await _service.requestMoreInfo(uid, message);
+    result.fold(
+      (failure) => null,
+      (verification) {
+        _ref.invalidate(pendingVerificationsProvider);
+      },
+    );
+    return result;
+  }
+}
+
+FILE: lib/features/dashboard/presentation/verifier/screens/verifier_dashboard_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../verification/data/verification_provider.dart';
+import '../../../../../shared/services/verification_model.dart';
+import 'package:go_router/go_router.dart';
+
+class VerifierDashboardScreen extends ConsumerWidget {
+  const VerifierDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pendingVerifs = ref.watch(pendingVerificationsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Verifier Dashboard')),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const _TodayCount(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Text('Verification Queue', style: Theme.of(context).textTheme.titleLarge),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: pendingVerifs.when(
+                data: (verifs) => verifs.isEmpty
+                    ? const _EmptyQueue()
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        itemCount: verifs.length,
+                        itemBuilder: (context, index) {
+                          return _VerificationCard(
+                            verification: verifs[index],
+                            onTap: () => context.push('/verification-review/${verifs[index].uid}'),
+                          );
+                        },
+                      ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayCount extends StatelessWidget {
+  const _TodayCount();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(AppSpacing.md),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.check_circle, color: AppColors.success, size: 32),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Reviewed Today', style: TextStyle(color: Colors.grey)),
+                TweenAnimationBuilder<int>(
+                  tween: IntTween(begin: 0, end: 0),
+                  duration: const Duration(milliseconds: 1000),
+                  builder: (context, value, _) {
+                    return Text('$value', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: AppColors.success));
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyQueue extends StatelessWidget {
+  const _EmptyQueue();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: AppSpacing.md),
+          Text('No pending verifications', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerificationCard extends StatelessWidget {
+  final Verification verification;
+  final VoidCallback onTap;
+
+  const _VerificationCard({required this.verification, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: ListTile(
+        onTap: onTap,
+        leading: CircleAvatar(
+          backgroundColor: AppColors.warning.withValues(alpha: 0.1),
+          child: const Icon(Icons.person, color: AppColors.warning),
+        ),
+        title: Text('${verification.role.toUpperCase()} Verification'),
+        subtitle: Text('Submitted: ${_formatDate(verification.submittedAt)}'),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime? dt) {
+    if (dt == null) return 'Unknown';
+    return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+FILE: lib/features/verification/presentation/screens/verification_review_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_radius.dart';
+import '../../../verification/data/verification_provider.dart';
+import '../../../auth/presentation/providers/local_auth_provider.dart';
+
+class VerificationReviewScreen extends ConsumerStatefulWidget {
+  final String uid;
+
+  const VerificationReviewScreen({super.key, required this.uid});
+
+  @override
+  ConsumerState<VerificationReviewScreen> createState() => _VerificationReviewScreenState();
+}
+
+class _VerificationReviewScreenState extends ConsumerState<VerificationReviewScreen> {
+  final _reasonController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _approve() async {
+    final authState = ref.read(localAuthStateProvider);
+    final reviewerId = authState.valueOrNull?.uid ?? 'verifier_1';
+
+    setState(() => _isLoading = true);
+    final actions = ref.read(verificationActionsProvider);
+    final result = await actions.approve(widget.uid, reviewerId);
+    setState(() => _isLoading = false);
+
+    result.fold(
+      (failure) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(failure.message), backgroundColor: AppColors.error)),
+      (verification) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification approved!'), backgroundColor: AppColors.success));
+        context.pop();
+      },
+    );
+  }
+
+  Future<void> _reject() async {
+    if (_reasonController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide a reason for rejection')));
+      return;
+    }
+
+    final authState = ref.read(localAuthStateProvider);
+    final reviewerId = authState.valueOrNull?.uid ?? 'verifier_1';
+
+    setState(() => _isLoading = true);
+    final actions = ref.read(verificationActionsProvider);
+    final result = await actions.reject(widget.uid, _reasonController.text, reviewerId);
+    setState(() => _isLoading = false);
+
+    result.fold(
+      (failure) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(failure.message), backgroundColor: AppColors.error)),
+      (verification) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification rejected'), backgroundColor: AppColors.warning));
+        context.pop();
+      },
+    );
+  }
+
+  Future<void> _requestInfo() async {
+    if (_reasonController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please provide what information is needed')));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final actions = ref.read(verificationActionsProvider);
+    final result = await actions.requestInfo(widget.uid, _reasonController.text);
+    setState(() => _isLoading = false);
+
+    result.fold(
+      (failure) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(failure.message), backgroundColor: AppColors.error)),
+      (verification) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Info requested'), backgroundColor: AppColors.secondary));
+        context.pop();
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Review Verification')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _DocumentPreview(title: 'ID Front', icon: Icons.badge),
+              const SizedBox(height: AppSpacing.md),
+              _DocumentPreview(title: 'ID Back', icon: Icons.badge),
+              const SizedBox(height: AppSpacing.md),
+              _DocumentPreview(title: 'Selfie', icon: Icons.face),
+              const SizedBox(height: AppSpacing.md),
+              _DocumentPreview(title: 'Medical Document', icon: Icons.medical_services),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Reason for rejection / Request more info:', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(hintText: 'Enter reason or additional info needed...'),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _reject,
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.error, side: const BorderSide(color: AppColors.error)),
+                      child: const Text('Reject'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _requestInfo,
+                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.warning, side: const BorderSide(color: AppColors.warning)),
+                      child: const Text('Request Info'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _approve,
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+                child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Approve'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentPreview extends StatelessWidget {
+  final String title;
+  final IconData icon;
+
+  const _DocumentPreview({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 150,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 40, color: Colors.grey),
+          const SizedBox(height: AppSpacing.sm),
+          Text(title, style: const TextStyle(color: Colors.grey)),
+          const Text('(Document placeholder)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+FILE: lib/features/dashboard/presentation/donor/screens/donor_dashboard_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/router/app_routes.dart';
+import '../../../../auth/presentation/providers/local_auth_provider.dart';
+import 'package:go_router/go_router.dart';
+
+class DonorDashboardScreen extends ConsumerWidget {
+  const DonorDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(localAuthStateProvider);
+    final user = authState.valueOrNull;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Donor Dashboard'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _AvailabilityToggle(user: user),
+              const SizedBox(height: AppSpacing.lg),
+              _QuickActions(context: context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvailabilityToggle extends StatelessWidget {
+  final dynamic user;
+
+  const _AvailabilityToggle({this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAvailable = user?.isAvailable ?? false;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isAvailable ? AppColors.success.withValues(alpha: 0.1) : AppColors.warning.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isAvailable ? Icons.check_circle : Icons.cancel,
+                color: isAvailable ? AppColors.success : AppColors.warning,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              isAvailable ? 'You are Available' : 'You are Unavailable',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              isAvailable
+                  ? 'Blood banks and receivers can see you as available for donation'
+                  : 'Toggle to let others know you are available to donate',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Switch(
+              value: isAvailable,
+              onChanged: (value) {},
+              activeThumbColor: AppColors.success,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  final BuildContext context;
+
+  const _QuickActions({required this.context});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quick Actions',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ActionCard(
+          icon: Icons.bloodtype,
+          title: 'Browse Blood Requests',
+          subtitle: 'Find people who need blood',
+          color: AppColors.primary,
+          onTap: () => context.go(AppRoutes.bloodRequests),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _ActionCard(
+          icon: Icons.history,
+          title: 'My Donations',
+          subtitle: 'View your donation history',
+          color: AppColors.secondary,
+          onTap: () {},
+        ),
+      ],
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+FILE: lib/features/blood_requests/presentation/screens/blood_requests_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_radius.dart';
+import '../../../../shared/services/blood_request_model.dart';
+import 'package:shimmer/shimmer.dart';
+
+final bloodRequestsProvider = FutureProvider<List<BloodRequest>>((ref) async {
+  return [];
+});
+
+class BloodRequestsScreen extends ConsumerWidget {
+  const BloodRequestsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestsAsync = ref.watch(bloodRequestsProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Blood Requests'),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _BloodTypeFilter(),
+            Expanded(
+              child: requestsAsync.when(
+                data: (requests) => requests.isEmpty
+                    ? _EmptyState()
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        itemCount: requests.length,
+                        itemBuilder: (context, index) {
+                          return _BloodRequestCard(request: requests[index]);
+                        },
+                      ),
+                loading: () => _LoadingState(),
+                error: (error, stack) => _ErrorState(message: error.toString()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BloodTypeFilter extends StatefulWidget {
+  @override
+  State<_BloodTypeFilter> createState() => _BloodTypeFilterState();
+}
+
+class _BloodTypeFilterState extends State<_BloodTypeFilter> {
+  String? selectedBloodType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _FilterChip(
+            label: 'All',
+            isSelected: selectedBloodType == null,
+            onTap: () => setState(() => selectedBloodType = null),
+          ),
+          ...BloodType.all.map((type) => _FilterChip(
+                label: type,
+                isSelected: selectedBloodType == type,
+                onTap: () => setState(() => selectedBloodType = type),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: AppSpacing.sm),
+      child: FilterChip(
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+        checkmarkColor: AppColors.primary,
+      ),
+    );
+  }
+}
+
+class _BloodRequestCard extends StatelessWidget {
+  final BloodRequest request;
+
+  const _BloodRequestCard({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Text(
+                    request.bloodType,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                if (request.isUrgent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('URGENT', style: TextStyle(color: Colors.white, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                const Spacer(),
+                Text(
+                  '${request.unitsNeeded} units',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                const SizedBox(width: AppSpacing.xs),
+                Text(request.location, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                const Icon(Icons.person, size: 16, color: Colors.grey),
+                const SizedBox(width: AppSpacing.xs),
+                Text(request.receiverName, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {},
+                    child: const Text('View Details'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text('Pledge'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'No blood requests',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: 5,
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: Colors.grey.shade300,
+          highlightColor: Colors.grey.shade100,
+          child: Card(
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: Container(
+              height: 150,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+
+  const _ErrorState({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 64, color: AppColors.error),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Something went wrong',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ElevatedButton(
+            onPressed: () {},
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+FILE: lib/features/dashboard/presentation/receiver/screens/receiver_dashboard_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/constants/app_spacing.dart';
+import '../../../../../core/router/app_routes.dart';
+import 'package:go_router/go_router.dart';
+
+class ReceiverDashboardScreen extends ConsumerWidget {
+  const ReceiverDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Receiver Dashboard'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Quick Actions',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _ActionCard(
+                icon: Icons.add_circle,
+                title: 'Post Blood Request',
+                subtitle: 'Request blood for yourself or a patient',
+                color: AppColors.primary,
+                onTap: () => context.go(AppRoutes.postBloodRequest),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _ActionCard(
+                icon: Icons.list_alt,
+                title: 'My Requests',
+                subtitle: 'View status of your blood requests',
+                color: AppColors.secondary,
+                onTap: () => context.go(AppRoutes.myRequests),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+}
+
+FILE: lib/features/blood_requests/presentation/screens/post_blood_request_screen.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../shared/services/blood_request_model.dart';
+import '../../../../shared/services/local_blood_request_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+final postBloodRequestProvider = StateNotifierProvider<PostBloodRequestNotifier, PostBloodRequestState>((ref) {
+  return PostBloodRequestNotifier(ref);
+});
+
+class PostBloodRequestState {
+  final bool isLoading;
+  final String? error;
+
+  const PostBloodRequestState({this.isLoading = false, this.error});
+
+  PostBloodRequestState copyWith({bool? isLoading, String? error}) {
+    return PostBloodRequestState(
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
+
+class PostBloodRequestNotifier extends StateNotifier<PostBloodRequestState> {
+  final Ref _ref;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  PostBloodRequestNotifier(this._ref) : super(const PostBloodRequestState());
+
+  Future<void> submitRequest({
+    required String bloodType,
+    required int units,
+    required String location,
+    required String urgency,
+    required String hospitalName,
+    required String contactPhone,
+  }) async {
+    try {
+      state = state.copyWith(isLoading: true);
+
+      final uid = await _secureStorage.read(key: 'user_id');
+      if (uid == null) {
+        state = state.copyWith(isLoading: false, error: 'User not logged in');
+        return;
+      }
+
+      // Use local blood request service instead of Firestore
+      final requestService = _ref.read(localBloodRequestServiceProvider);
+      await requestService.createRequest(
+        receiverId: uid,
+        receiverName: 'User',
+        bloodType: bloodType,
+        unitsNeeded: units,
+        location: location,
+        urgency: urgency,
+        hospitalName: hospitalName,
+        contactPhone: contactPhone,
+      );
+
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+}
+
+class PostBloodRequestScreen extends ConsumerStatefulWidget {
+  const PostBloodRequestScreen({super.key});
+
+  @override
+  ConsumerState<PostBloodRequestScreen> createState() => _PostBloodRequestScreenState();
+}
+
+class _PostBloodRequestScreenState extends ConsumerState<PostBloodRequestScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _locationController = TextEditingController();
+  final _hospitalController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  String? _selectedBloodType;
+  int _units = 1;
+  String _urgency = 'normal';
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    _hospitalController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedBloodType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select blood type')),
+      );
+      return;
+    }
+
+    await ref.read(postBloodRequestProvider.notifier).submitRequest(
+          bloodType: _selectedBloodType!,
+          units: _units,
+          location: _locationController.text,
+          urgency: _urgency,
+          hospitalName: _hospitalController.text,
+          contactPhone: _phoneController.text,
+        );
+
+    if (mounted) {
+      context.pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(postBloodRequestProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Post Blood Request'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Blood Type Required', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  children: BloodType.all.map((type) {
+                    final isSelected = _selectedBloodType == type;
+                    return ChoiceChip(
+                      label: Text(type),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() => _selectedBloodType = type),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text('Units Needed', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _units > 1 ? () => setState(() => _units--) : null,
+                      icon: const Icon(Icons.remove_circle_outline),
+                    ),
+                    Text('$_units', style: Theme.of(context).textTheme.headlineSmall),
+                    IconButton(
+                      onPressed: _units < 10 ? () => setState(() => _units++) : null,
+                      icon: const Icon(Icons.add_circle_outline),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text('Urgency', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: AppSpacing.sm),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'normal', label: Text('Normal')),
+                    ButtonSegment(value: 'urgent', label: Text('Urgent')),
+                  ],
+                  selected: {_urgency},
+                  onSelectionChanged: (value) => setState(() => _urgency = value.first),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Location',
+                    hintText: 'City/Area',
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _hospitalController,
+                  decoration: const InputDecoration(
+                    labelText: 'Hospital Name',
+                    hintText: 'Enter hospital name',
+                    prefixIcon: Icon(Icons.local_hospital),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Contact Phone',
+                    hintText: '+91 9876543210',
+                    prefixIcon: Icon(Icons.phone),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                ElevatedButton(
+                  onPressed: state.isLoading ? null : _submit,
+                  child: state.isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Post Request'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+FILE: lib/shared/services/user_model.dart
+----------------------------------------
+import 'package:equatable/equatable.dart';
+import '../../rbac/models/app_role.dart';
+
+enum VerificationStatus {
+  pending,
+  inReview,
+  verified,
+  rejected;
+
+  String get displayName {
+    switch (this) {
+      case VerificationStatus.pending:
+        return 'Pending';
+      case VerificationStatus.inReview:
+        return 'In Review';
+      case VerificationStatus.verified:
+        return 'Verified';
+      case VerificationStatus.rejected:
+        return 'Rejected';
+    }
+  }
+
+  static VerificationStatus fromString(String value) {
+    return VerificationStatus.values.firstWhere(
+      (status) => status.name == value,
+      orElse: () => VerificationStatus.pending,
+    );
+  }
+}
+
+class User extends Equatable {
+  final String uid;
+  final String phone;
+  final AppRole role;
+  final VerificationStatus verificationStatus;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? bloodType;
+  final String? name;
+  final bool isAvailable;
+  final bool isBanned;
+
+  const User({
+    required this.uid,
+    required this.phone,
+    required this.role,
+    required this.verificationStatus,
+    required this.createdAt,
+    required this.updatedAt,
+    this.bloodType,
+    this.name,
+    this.isAvailable = false,
+    this.isBanned = false,
+  });
+
+  bool get isVerified => verificationStatus == VerificationStatus.verified;
+
+  User copyWith({
+    String? uid,
+    String? phone,
+    AppRole? role,
+    VerificationStatus? verificationStatus,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? bloodType,
+    String? name,
+    bool? isAvailable,
+    bool? isBanned,
+  }) {
+    return User(
+      uid: uid ?? this.uid,
+      phone: phone ?? this.phone,
+      role: role ?? this.role,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      bloodType: bloodType ?? this.bloodType,
+      name: name ?? this.name,
+      isAvailable: isAvailable ?? this.isAvailable,
+      isBanned: isBanned ?? this.isBanned,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'uid': uid,
+      'phone': phone,
+      'role': role.name,
+      'verificationStatus': verificationStatus.name,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+      'bloodType': bloodType,
+      'name': name,
+      'isAvailable': isAvailable,
+      'isBanned': isBanned,
+    };
+  }
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      uid: json['uid'] as String,
+      phone: json['phone'] as String,
+      role: AppRole.fromString(json['role'] as String),
+      verificationStatus: VerificationStatus.fromString(json['verificationStatus'] as String),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      bloodType: json['bloodType'] as String?,
+      name: json['name'] as String?,
+      isAvailable: json['isAvailable'] as bool? ?? false,
+      isBanned: json['isBanned'] as bool? ?? false,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        uid,
+        phone,
+        role,
+        verificationStatus,
+        createdAt,
+        updatedAt,
+        bloodType,
+        name,
+        isAvailable,
+        isBanned,
+      ];
+}
+
+FILE: lib/shared/services/blood_request_model.dart
+----------------------------------------
+import 'package:equatable/equatable.dart';
+
+class BloodRequest extends Equatable {
+  final String id;
+  final String receiverId;
+  final String receiverName;
+  final String bloodType;
+  final int unitsNeeded;
+  final String location;
+  final String? locationDetails;
+  final String urgency;
+  final String? medicalProofUrl;
+  final String status;
+  final DateTime createdAt;
+  final DateTime? fulfilledAt;
+  final List<String> pledgedDonors;
+  final String? hospitalName;
+  final String? contactPhone;
+
+  const BloodRequest({
+    required this.id,
+    required this.receiverId,
+    required this.receiverName,
+    required this.bloodType,
+    required this.unitsNeeded,
+    required this.location,
+    this.locationDetails,
+    required this.urgency,
+    this.medicalProofUrl,
+    required this.status,
+    required this.createdAt,
+    this.fulfilledAt,
+    this.pledgedDonors = const [],
+    this.hospitalName,
+    this.contactPhone,
+  });
+
+  bool get isUrgent => urgency == 'urgent';
+  bool get isPosted => status == 'posted';
+  bool get isVerified => status == 'verified';
+  bool get isMatched => status == 'matched';
+  bool get isFulfilled => status == 'fulfilled';
+
+  int get pledgedCount => pledgedDonors.length;
+  bool get needsMoreDonors => pledgedCount < unitsNeeded;
+
+  BloodRequest copyWith({
+    String? id,
+    String? receiverId,
+    String? receiverName,
+    String? bloodType,
+    int? unitsNeeded,
+    String? location,
+    String? locationDetails,
+    String? urgency,
+    String? medicalProofUrl,
+    String? status,
+    DateTime? createdAt,
+    DateTime? fulfilledAt,
+    List<String>? pledgedDonors,
+    String? hospitalName,
+    String? contactPhone,
+  }) {
+    return BloodRequest(
+      id: id ?? this.id,
+      receiverId: receiverId ?? this.receiverId,
+      receiverName: receiverName ?? this.receiverName,
+      bloodType: bloodType ?? this.bloodType,
+      unitsNeeded: unitsNeeded ?? this.unitsNeeded,
+      location: location ?? this.location,
+      locationDetails: locationDetails ?? this.locationDetails,
+      urgency: urgency ?? this.urgency,
+      medicalProofUrl: medicalProofUrl ?? this.medicalProofUrl,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      fulfilledAt: fulfilledAt ?? this.fulfilledAt,
+      pledgedDonors: pledgedDonors ?? this.pledgedDonors,
+      hospitalName: hospitalName ?? this.hospitalName,
+      contactPhone: contactPhone ?? this.contactPhone,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'receiverId': receiverId,
+      'receiverName': receiverName,
+      'bloodType': bloodType,
+      'unitsNeeded': unitsNeeded,
+      'location': location,
+      'locationDetails': locationDetails,
+      'urgency': urgency,
+      'medicalProofUrl': medicalProofUrl,
+      'status': status,
+      'createdAt': createdAt.toIso8601String(),
+      'fulfilledAt': fulfilledAt?.toIso8601String(),
+      'pledgedDonors': pledgedDonors,
+      'hospitalName': hospitalName,
+      'contactPhone': contactPhone,
+    };
+  }
+
+  factory BloodRequest.fromJson(Map<String, dynamic> json) {
+    return BloodRequest(
+      id: json['id'] as String,
+      receiverId: json['receiverId'] as String,
+      receiverName: json['receiverName'] as String,
+      bloodType: json['bloodType'] as String,
+      unitsNeeded: json['unitsNeeded'] as int,
+      location: json['location'] as String,
+      locationDetails: json['locationDetails'] as String?,
+      urgency: json['urgency'] as String,
+      medicalProofUrl: json['medicalProofUrl'] as String?,
+      status: json['status'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      fulfilledAt: json['fulfilledAt'] != null ? DateTime.parse(json['fulfilledAt'] as String) : null,
+      pledgedDonors: (json['pledgedDonors'] as List<dynamic>?)?.cast<String>() ?? [],
+      hospitalName: json['hospitalName'] as String?,
+      contactPhone: json['contactPhone'] as String?,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        id,
+        receiverId,
+        receiverName,
+        bloodType,
+        unitsNeeded,
+        location,
+        locationDetails,
+        urgency,
+        medicalProofUrl,
+        status,
+        createdAt,
+        fulfilledAt,
+        pledgedDonors,
+        hospitalName,
+        contactPhone,
+      ];
+}
+
+class BloodType {
+  static const List<String> all = [
+    'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'
+  ];
+  
+  static const Map<String, List<String>> compatibility = {
+    'A+': ['A+', 'A-', 'AB+', 'AB-'],
+    'A-': ['A-', 'O-'],
+    'B+': ['B+', 'B-', 'AB+', 'AB-'],
+    'B-': ['B-', 'O-'],
+    'AB+': ['AB+', 'AB-'],
+    'AB-': ['AB-'],
+    'O+': ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'],
+    'O-': ['O-'],
+  };
+  
+  static List<String> getCompatible(String bloodType) {
+    return compatibility[bloodType] ?? [];
+  }
+}
+
+FILE: lib/shared/services/verification_model.dart
+----------------------------------------
+import 'package:equatable/equatable.dart';
+
+class Verification extends Equatable {
+  final String uid;
+  final String role;
+  final String? idFrontUrl;
+  final String? idBackUrl;
+  final String? selfieUrl;
+  final String? medicalDocUrl;
+  final String status;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final String? reviewerId;
+  final String? rejectionReason;
+  final bool canResubmit;
+
+  const Verification({
+    required this.uid,
+    required this.role,
+    this.idFrontUrl,
+    this.idBackUrl,
+    this.selfieUrl,
+    this.medicalDocUrl,
+    required this.status,
+    this.submittedAt,
+    this.reviewedAt,
+    this.reviewerId,
+    this.rejectionReason,
+    this.canResubmit = true,
+  });
+
+  bool get isPending => status == 'pending';
+  bool get isInReview => status == 'in_review';
+  bool get isVerified => status == 'verified';
+  bool get isRejected => status == 'rejected';
+  bool get needsMedicalDoc => role == 'receiver';
+
+  Verification copyWith({
+    String? uid,
+    String? role,
+    String? idFrontUrl,
+    String? idBackUrl,
+    String? selfieUrl,
+    String? medicalDocUrl,
+    String? status,
+    DateTime? submittedAt,
+    DateTime? reviewedAt,
+    String? reviewerId,
+    String? rejectionReason,
+    bool? canResubmit,
+  }) {
+    return Verification(
+      uid: uid ?? this.uid,
+      role: role ?? this.role,
+      idFrontUrl: idFrontUrl ?? this.idFrontUrl,
+      idBackUrl: idBackUrl ?? this.idBackUrl,
+      selfieUrl: selfieUrl ?? this.selfieUrl,
+      medicalDocUrl: medicalDocUrl ?? this.medicalDocUrl,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
+      reviewedAt: reviewedAt ?? this.reviewedAt,
+      reviewerId: reviewerId ?? this.reviewerId,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      canResubmit: canResubmit ?? this.canResubmit,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'uid': uid,
+      'role': role,
+      'idFrontUrl': idFrontUrl,
+      'idBackUrl': idBackUrl,
+      'selfieUrl': selfieUrl,
+      'medicalDocUrl': medicalDocUrl,
+      'status': status,
+      'submittedAt': submittedAt?.toIso8601String(),
+      'reviewedAt': reviewedAt?.toIso8601String(),
+      'reviewerId': reviewerId,
+      'rejectionReason': rejectionReason,
+      'canResubmit': canResubmit,
+    };
+  }
+
+  factory Verification.fromJson(Map<String, dynamic> json) {
+    return Verification(
+      uid: json['uid'] as String,
+      role: json['role'] as String,
+      idFrontUrl: json['idFrontUrl'] as String?,
+      idBackUrl: json['idBackUrl'] as String?,
+      selfieUrl: json['selfieUrl'] as String?,
+      medicalDocUrl: json['medicalDocUrl'] as String?,
+      status: json['status'] as String? ?? 'pending',
+      submittedAt: json['submittedAt'] != null ? DateTime.parse(json['submittedAt'] as String) : null,
+      reviewedAt: json['reviewedAt'] != null ? DateTime.parse(json['reviewedAt'] as String) : null,
+      reviewerId: json['reviewerId'] as String?,
+      rejectionReason: json['rejectionReason'] as String?,
+      canResubmit: json['canResubmit'] as bool? ?? true,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        uid,
+        role,
+        idFrontUrl,
+        idBackUrl,
+        selfieUrl,
+        medicalDocUrl,
+        status,
+        submittedAt,
+        reviewedAt,
+        reviewerId,
+        rejectionReason,
+        canResubmit,
+      ];
+}
+
+FILE: lib/main.dart
+----------------------------------------
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/theme/app_theme.dart';
+import 'core/router/app_router.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  runApp(
+    const ProviderScope(
+      child: BloodDonateApp(),
+    ),
+  );
+}
+
+class BloodDonateApp extends ConsumerWidget {
+  const BloodDonateApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
+      title: 'BloodDonate',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
+      routerConfig: router,
+    );
+  }
+}
+
