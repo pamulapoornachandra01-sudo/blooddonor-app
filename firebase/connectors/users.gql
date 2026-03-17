@@ -1,0 +1,113 @@
+# User Queries
+query GetUser($id: UUID!) {
+  user(id: $id) {
+    id
+    firebaseUid
+    phone
+    role
+    name
+    bloodType
+    verificationStatus
+    isAvailable
+    isBanned
+    createdAt
+    updatedAt
+  }
+}
+
+query GetUserByFirebaseUid($firebaseUid: String!) {
+  users(where: { firebaseUid: { eq: $firebaseUid } }) {
+    id
+    firebaseUid
+    phone
+    role
+    name
+    bloodType
+    verificationStatus
+    isAvailable
+    isBanned
+    createdAt
+    updatedAt
+  }
+}
+
+query ListUsers {
+  users(orderBy: { createdAt: DESC }) {
+    id
+    firebaseUid
+    phone
+    role
+    name
+    bloodType
+    verificationStatus
+    isAvailable
+    isBanned
+    createdAt
+    updatedAt
+  }
+}
+
+query ListUsersByRole($role: String!) {
+  users(where: { role: { eq: $role } }, orderBy: { createdAt: DESC }) {
+    id
+    firebaseUid
+    phone
+    role
+    name
+    bloodType
+    verificationStatus
+    isAvailable
+    isBanned
+    createdAt
+    updatedAt
+  }
+}
+
+# User Mutations
+mutation CreateUser($firebaseUid: String!, $phone: String!, $role: String!) {
+  createUser(data: {
+    firebaseUid: $firebaseUid,
+    phone: $phone,
+    role: $role
+  }) {
+    id
+    firebaseUid
+    phone
+    role
+    verificationStatus
+    createdAt
+  }
+}
+
+mutation UpdateUser(
+  $id: UUID!,
+  $name: String,
+  $bloodType: String,
+  $role: String,
+  $verificationStatus: String,
+  $isAvailable: Boolean,
+  $isBanned: Boolean
+) {
+  updateUser(id: $id, data: {
+    name: $name,
+    bloodType: $bloodType,
+    role: $role,
+    verificationStatus: $verificationStatus,
+    isAvailable: $isAvailable,
+    isBanned: $isBanned,
+    updatedAt: "now"
+  }) {
+    id
+    name
+    bloodType
+    role
+    verificationStatus
+    isAvailable
+    isBanned
+    updatedAt
+  }
+}
+
+mutation DeleteUser($id: UUID!) {
+  deleteUser(id: $id)
+}

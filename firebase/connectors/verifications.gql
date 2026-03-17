@@ -1,0 +1,116 @@
+# Verification Queries
+query GetVerification($userId: UUID!) {
+  verifications(where: { userId: { eq: $userId } }) {
+    id
+    userId
+    idFrontUrl
+    idBackUrl
+    selfieUrl
+    medicalDocUrl
+    status
+    rejectionReason
+    submittedAt
+    reviewedAt
+    reviewerId
+  }
+}
+
+query ListVerifications {
+  verifications(orderBy: { submittedAt: DESC }) {
+    id
+    userId
+    idFrontUrl
+    idBackUrl
+    selfieUrl
+    medicalDocUrl
+    status
+    rejectionReason
+    submittedAt
+    reviewedAt
+    reviewerId
+  }
+}
+
+query ListPendingVerifications {
+  verifications(where: { status: { eq: "pending" } }, orderBy: { submittedAt: ASC }) {
+    id
+    userId
+    idFrontUrl
+    idBackUrl
+    selfieUrl
+    medicalDocUrl
+    status
+    rejectionReason
+    submittedAt
+  }
+}
+
+# Verification Mutations
+mutation CreateVerification(
+  $userId: UUID!,
+  $idFrontUrl: String,
+  $idBackUrl: String,
+  $selfieUrl: String,
+  $medicalDocUrl: String
+) {
+  createVerification(data: {
+    userId: $userId,
+    idFrontUrl: $idFrontUrl,
+    idBackUrl: $idBackUrl,
+    selfieUrl: $selfieUrl,
+    medicalDocUrl: $medicalDocUrl,
+    status: "pending"
+  }) {
+    id
+    userId
+    status
+    submittedAt
+  }
+}
+
+mutation UpdateVerification(
+  $userId: UUID!,
+  $status: String!,
+  $rejectionReason: String,
+  $reviewedAt: Timestamp,
+  $reviewerId: UUID
+) {
+  updateVerification(where: { userId: $userId }, data: {
+    status: $status,
+    rejectionReason: $rejectionReason,
+    reviewedAt: $reviewedAt,
+    reviewerId: $reviewerId
+  }) {
+    id
+    userId
+    status
+    rejectionReason
+    reviewedAt
+  }
+}
+
+mutation ApproveVerification($userId: UUID!, $reviewerId: UUID!) {
+  updateVerification(where: { userId: $userId }, data: {
+    status: "verified",
+    reviewedAt: "now",
+    reviewerId: $reviewerId
+  }) {
+    id
+    status
+    reviewedAt
+  }
+}
+
+mutation RejectVerification($userId: UUID!, $reviewerId: UUID!, $reason: String!) {
+  updateVerification(where: { userId: $userId }, data: {
+    status: "rejected",
+    rejectionReason: $reason,
+    reviewedAt: "now",
+    reviewerId: $reviewerId
+  }) {
+    id
+    status
+    rejectionReason
+    reviewedAt
+  }
+}

@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/router/app_routes.dart';
-import '../../../../rbac/models/app_role.dart';
-import '../providers/local_auth_provider.dart';
+import '../providers/firebase_auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -16,6 +15,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phoneController = TextEditingController();
+  final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _otpSent = false;
@@ -23,6 +23,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -30,7 +31,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+    
+    await ref.read(firebaseAuthNotifierProvider.notifier).sendOTP(_phoneController.text);
+    
     setState(() {
       _isLoading = false;
       _otpSent = true;
@@ -42,12 +45,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     setState(() => _isLoading = true);
 
-    await ref.read(localAuthStateProvider.notifier).register(_phoneController.text, AppRole.donor);
+    await ref.read(firebaseAuthNotifierProvider.notifier).verifyOTP(_otpController.text);
 
     setState(() => _isLoading = false);
 
     if (mounted) {
-      final authState = ref.read(localAuthStateProvider);
+      final authState = ref.read(firebaseAuthNotifierProvider);
       authState.when(
         data: (user) {
           if (user != null) {
@@ -105,10 +108,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           const SizedBox(height: AppSpacing.sm),
                           Text('OTP sent to ${_phoneController.text}', style: Theme.of(context).textTheme.bodyLarge),
                           const SizedBox(height: AppSpacing.sm),
-                          const Text('Use any 6-digit code to verify', style: TextStyle(color: Colors.grey)),
+                          const Text('Enter the 6-digit code', style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  TextFormField(
+                    controller: _otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'OTP',
+                      hintText: '123456',
+                      prefixIcon: Icon(Icons.lock),
+                      counterText: '',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Required';
+                      if (value.length != 6) return 'OTP must be 6 digits';
+                      return null;
+                    },
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   ElevatedButton(

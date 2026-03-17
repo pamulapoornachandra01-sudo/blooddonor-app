@@ -1,6 +1,6 @@
 # 🩸 BloodDonate
 
-A Flutter-based Blood Donation MVP app that connects **donors**, **receivers**, **verifiers**, and **admins** — all with role-based access control, identity verification, and a clean feature-driven architecture.
+A Flutter-based Blood Donation app that connects **donors**, **receivers**, **verifiers**, and **admins** — with Firebase authentication, PostgreSQL database (via Firebase Data Connect), role-based access control, identity verification, and a clean feature-driven architecture.
 
 ---
 
@@ -8,12 +8,12 @@ A Flutter-based Blood Donation MVP app that connects **donors**, **receivers**, 
 
 - [Features](#-features)
 - [Tech Stack](#-tech-stack)
+- [Firebase Setup](#-firebase-setup)
 - [Project Structure](#-project-structure)
 - [Prerequisites](#-prerequisites)
 - [Local Installation](#-local-installation)
 - [Running the App](#-running-the-app)
 - [Testing](#-testing)
-- [Demo Accounts](#-demo-accounts)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -21,32 +21,76 @@ A Flutter-based Blood Donation MVP app that connects **donors**, **receivers**, 
 
 ## ✨ Features
 
-- **Role-Based Access Control (RBAC)** — Donor, Receiver, Verifier, and Admin roles with granular permissions
-- **User Authentication** — Phone-based registration and login
-- **Identity Verification** — Upload ID documents, selfie, and medical docs for verification
-- **Blood Requests** — Post, browse, and respond to blood donation requests
+- **Firebase Authentication** — Phone OTP verification
+- **Role-Based Access Control (RBAC)** — Donor, Receiver, Verifier, Admin, SuperAdmin roles
+- **Identity Verification** — Upload ID documents, selfie, and medical docs
+- **Blood Requests** — Post, browse, filter, and respond to blood donation requests
+- **Real-time Updates** — Firestore/Data Connect for live data sync
 - **Role-Specific Dashboards** — Tailored dashboard for each user role
-- **Notifications** — In-app notification system
+- **Push Notifications** — Firebase Cloud Messaging
 - **Profile Management** — Edit profile, blood type, availability status
-- **Admin Panel** — User management, banning, stats overview
+- **Admin Panel** — User management, verification queue, banning, stats
 - **Dark & Light Theme** — System-adaptive theming
-- **Offline-First** — Local data services (no backend required for development)
 
 ---
 
 ## 🛠 Tech Stack
 
-| Category              | Technology                          |
-|-----------------------|-------------------------------------|
-| Framework             | Flutter 3.x                         |
-| Language              | Dart (SDK ^3.11.0)                  |
-| State Management      | Riverpod (`flutter_riverpod`)       |
-| Navigation            | GoRouter (`go_router`)              |
-| Functional Programming| fpdart                             |
-| Local Storage         | Hive, Flutter Secure Storage        |
-| Animations            | Lottie, Shimmer                     |
-| Camera & Images       | camera, image_picker, image_cropper |
-| Code Generation       | Freezed, json_serializable          |
+| Category | Technology |
+|----------|------------|
+| Framework | Flutter 3.x |
+| Language | Dart (SDK ^3.11.0) |
+| State Management | Riverpod (`flutter_riverpod`) |
+| Navigation | GoRouter (`go_router`) |
+| Authentication | Firebase Auth (Phone OTP) |
+| Database | Firebase Data Connect (PostgreSQL) / Firestore (NoSQL) |
+| Storage | Firebase Storage |
+| Notifications | Firebase Cloud Messaging |
+| Local Storage | Hive, Flutter Secure Storage |
+| Animations | Lottie, Shimmer |
+| Camera & Images | camera, image_picker, image_cropper |
+| Code Generation | Freezed, json_serializable |
+
+---
+
+## 🔥 Firebase Setup
+
+### Quick Start (New Laptop)
+
+```bash
+# 1. Clone the project
+git clone <your-repo>
+cd blood_donate
+
+# 2. Install dependencies
+flutter pub get
+
+# 3. Install Firebase CLI
+npm install -g firebase-tools
+
+# 4. Login to Firebase
+firebase login
+
+# 5. Initialize Data Connect (if not done)
+firebase init dataconnect
+# Select "Use existing Cloud SQL instance" if prompted
+
+# 6. Deploy and generate SDK
+firebase deploy
+```
+
+### Firebase Project Details
+
+| Resource | Details |
+|----------|---------|
+| Project ID | `blood-bank-8cc48` |
+| Database | Cloud SQL (PostgreSQL) via Data Connect |
+| Auth | Phone OTP |
+| Storage | Firebase Storage |
+
+### For Detailed Setup Instructions
+
+See [FIREBASE_SETUP.md](./FIREBASE_SETUP.md)
 
 ---
 
@@ -54,68 +98,79 @@ A Flutter-based Blood Donation MVP app that connects **donors**, **receivers**, 
 
 ```
 lib/
-├── main.dart                    # App entry point
+├── main.dart                    # App entry point (Firebase init)
 ├── core/                        # App-wide core utilities
-│   ├── constants/               # Colors, spacing, typography, animations
-│   ├── errors/                  # Custom failure classes
-│   ├── router/                  # GoRouter configuration & routes
-│   └── theme/                   # Light & dark theme definitions
-├── features/                    # Feature modules (clean architecture)
-│   ├── auth/                    # Authentication (login, register, role selection)
-│   ├── blood_requests/          # Post, browse, detail views for blood requests
-│   ├── dashboard/               # Role-specific dashboards (donor/receiver/admin/verifier)
-│   ├── notifications/           # In-app notifications
-│   ├── profile/                 # Profile view & edit
-│   └── verification/            # Document upload & verification review
-├── rbac/                        # Role-based access control system
-│   ├── models/                  # AppRole, AppPermission enums
-│   ├── permission_guard.dart    # Route/action permission guards
-│   ├── rbac_service.dart        # RBAC service logic
-│   └── role_permission_matrix.dart  # Role-permission mapping
-└── shared/                      # Shared across features
-    ├── services/                # Local data services & models
-    └── widgets/                 # Reusable widgets (scaffold, animations)
+│   ├── constants/               # Colors, spacing, typography
+│   ├── errors/                 # Custom failure classes
+│   ├── router/                 # GoRouter configuration
+│   └── theme/                  # Light & dark theme definitions
+├── features/                   # Feature modules (clean architecture)
+│   ├── auth/                   # Authentication (login, register, OTP)
+│   ├── blood_requests/         # Blood request CRUD operations
+│   ├── dashboard/              # Role-specific dashboards
+│   ├── notifications/          # In-app notifications
+│   ├── profile/                # Profile view & edit
+│   └── verification/           # Document upload & verification review
+├── rbac/                       # Role-based access control
+│   ├── models/                 # AppRole, AppPermission enums
+│   ├── permission_guard.dart   # Route/action permission guards
+│   ├── rbac_service.dart      # RBAC service logic
+│   └── role_permission_matrix.dart
+└── shared/                     # Shared across features
+    ├── services/               # Firebase & data services
+    │   ├── firebase_auth_service.dart
+    │   ├── firestore_service.dart
+    │   ├── data_connect_service.dart
+    │   └── user_model.dart
+    └── widgets/                # Reusable widgets
+
+firebase/
+├── dataconnect.yaml            # Data Connect config
+├── schema.gql                  # PostgreSQL schema
+└── connectors/                # GraphQL queries & mutations
+    ├── users.gql
+    ├── blood_requests.gql
+    ├── verifications.gql
+    └── notifications.gql
 ```
 
 ---
 
 ## 📦 Prerequisites
 
-Before you begin, make sure you have the following installed:
-
 ### 1. Flutter SDK
 
 Install Flutter **3.x** (requires Dart SDK ^3.11.0):
 
 ```bash
-# Check if Flutter is installed
 flutter --version
-
-# If not installed, follow:
-# https://docs.flutter.dev/get-started/install
 ```
 
-### 2. Android Setup (for Android)
+### 2. Node.js & npm
 
-- **Android Studio** (latest) — [Download](https://developer.android.com/studio)
-- **Android SDK** (API 34 or higher recommended)
-- **Android Emulator** or a physical device with USB debugging enabled
+Required for Firebase CLI:
 
 ```bash
-# Verify Android toolchain
+node --version
+npm --version
+```
+
+### 3. Android Setup
+
+- **Android Studio** (latest)
+- **Android SDK** (API 34 or higher)
+- **Android Emulator** or physical device with USB debugging
+
+```bash
 flutter doctor --android-licenses
 flutter doctor
 ```
 
-### 3. iOS Setup (macOS only)
-
-- **Xcode** (latest) — Install from Mac App Store
-- **CocoaPods** — `sudo gem install cocoapods`
-
-### 4. Git
+### 4. Firebase CLI
 
 ```bash
-git --version
+npm install -g firebase-tools
+firebase --version
 ```
 
 ---
@@ -125,8 +180,8 @@ git --version
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/pamulapoornachandra01-sudo/blooddonor-app.git
-cd blooddonor-app
+git clone <your-repo>
+cd blood_donate
 ```
 
 ### Step 2: Install Dependencies
@@ -135,19 +190,16 @@ cd blooddonor-app
 flutter pub get
 ```
 
-### Step 3: Run Code Generation (if modifying models)
+### Step 3: Configure Firebase
+
+The project includes:
+- `android/app/google-services.json` — Android Firebase config
+
+### Step 4: Run the App
 
 ```bash
-dart run build_runner build --delete-conflicting-outputs
+flutter run
 ```
-
-### Step 4: Verify Setup
-
-```bash
-flutter doctor
-```
-
-Make sure there are no critical issues (✗) for your target platform.
 
 ---
 
@@ -156,37 +208,17 @@ Make sure there are no critical issues (✗) for your target platform.
 ### On Android Emulator
 
 ```bash
-# List available devices
 flutter devices
-
-# Run the app
 flutter run
 ```
 
-### On a Physical Android Device
+### On Physical Device
 
-1. Enable **Developer Options** → **USB Debugging** on your phone
+1. Enable **Developer Options** → **USB Debugging**
 2. Connect via USB
-3. Run:
+3. Run: `flutter run`
 
-```bash
-flutter run
-```
-
-### On Chrome (Web - for quick testing)
-
-```bash
-flutter run -d chrome
-```
-
-### On iOS Simulator (macOS only)
-
-```bash
-open -a Simulator
-flutter run
-```
-
-### Build APK (Release)
+### Build APK
 
 ```bash
 # Debug APK
@@ -196,7 +228,7 @@ flutter build apk --debug
 flutter build apk --release
 ```
 
-The APK will be at: `build/app/outputs/flutter-apk/app-release.apk`
+APK location: `build/app/outputs/flutter-apk/`
 
 ---
 
@@ -208,74 +240,56 @@ The APK will be at: `build/app/outputs/flutter-apk/app-release.apk`
 flutter test
 ```
 
-### Run a Specific Test File
+### Run Specific Tests
 
 ```bash
 flutter test test/rbac_test.dart
 flutter test test/blood_request_service_test.dart
 flutter test test/local_user_service_test.dart
-flutter test test/widget_test.dart
 ```
 
-### Available Test Suites
-
-| Test File                          | Description                                      |
-|------------------------------------|--------------------------------------------------|
-| `test/rbac_test.dart`              | Role-based access control & permission validation |
-| `test/blood_request_service_test.dart` | Blood request creation, response, filtering   |
-| `test/local_user_service_test.dart`| User registration, login, profile updates         |
-| `test/widget_test.dart`            | Basic widget smoke test                           |
-
-### Run Tests with Verbose Output
+### Analyze Code
 
 ```bash
-flutter test --reporter expanded
+flutter analyze
 ```
-
-### Run Tests with Coverage
-
-```bash
-flutter test --coverage
-```
-
-Coverage report will be generated at `coverage/lcov.info`.
 
 ---
 
-## 🔑 Demo Accounts
+## 📂 Important Files
 
-The app uses **local data services** (no backend needed). Demo data is seeded automatically.
-
-| Name            | Phone           | Role     | Verification Status |
-|-----------------|-----------------|----------|---------------------|
-| John Donor      | +919876543210   | Donor    | Verified            |
-| Jane Receiver   | +919876543211   | Receiver | Pending             |
-| Bob Smith       | +919876543212   | Donor    | Rejected            |
-| Alice Verifier  | +919876543213   | Verifier | Verified            |
-| Admin User      | +919876543214   | Admin    | Verified            |
-
-> **Note**: Since this is an MVP with local services, data resets on app restart.
+| File | Description |
+|------|-------------|
+| `FIREBASE_SETUP.md` | Complete Firebase/Data Connect setup guide |
+| `lib/main.dart` | App entry with Firebase initialization |
+| `lib/shared/services/firebase_auth_service.dart` | Phone OTP authentication |
+| `lib/shared/services/firestore_service.dart` | Firestore database operations |
+| `lib/shared/services/data_connect_service.dart` | Data Connect (PostgreSQL) wrapper |
+| `firebase/schema.gql` | PostgreSQL database schema |
+| `android/app/google-services.json` | Firebase Android config |
 
 ---
 
 ## 🔧 Useful Commands
 
 ```bash
-# Analyze code for lint issues
-flutter analyze
-
-# Auto-fix lint issues
-dart fix --apply
-
-# Format code
-dart format .
-
-# Clean build cache
+# Clean and rebuild
 flutter clean
 flutter pub get
 
-# List connected devices
-flutter devices
+# Code analysis
+flutter analyze
+dart fix --apply
+dart format .
+
+# Build
+flutter build apk --debug
+flutter build apk --release
+
+# Firebase
+firebase login
+firebase deploy
+firebase init dataconnect
 ```
 
 ---
@@ -293,6 +307,14 @@ flutter devices
 ## 📄 License
 
 This project is for educational and demonstration purposes.
+
+---
+
+## 🔗 Links
+
+- [Firebase Console](https://console.firebase.google.com/project/blood-bank-8cc48)
+- [Firebase Data Connect Docs](https://firebase.google.com/docs/data-connect)
+- [Flutter Docs](https://docs.flutter.dev)
 
 ---
 

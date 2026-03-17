@@ -1,0 +1,64 @@
+# Notification Queries
+query GetNotifications($userId: UUID!) {
+  notifications(where: { userId: { eq: $userId } }, orderBy: { createdAt: DESC }) {
+    id
+    userId
+    title
+    body
+    type
+    isRead
+    createdAt
+  }
+}
+
+query ListUnreadNotifications($userId: UUID!) {
+  notifications(where: { userId: { eq: $userId }, isRead: { eq: false } }, orderBy: { createdAt: DESC }) {
+    id
+    userId
+    title
+    body
+    type
+    isRead
+    createdAt
+  }
+}
+
+# Notification Mutations
+mutation CreateNotification(
+  $userId: UUID!,
+  $title: String!,
+  $body: String,
+  $type: String
+) {
+  createNotification(data: {
+    userId: $userId,
+    title: $title,
+    body: $body,
+    type: $type,
+    isRead: false
+  }) {
+    id
+    userId
+    title
+    createdAt
+  }
+}
+
+mutation MarkNotificationAsRead($id: UUID!) {
+  updateNotification(id: $id, data: {
+    isRead: true
+  }) {
+    id
+    isRead
+  }
+}
+
+mutation MarkAllNotificationsAsRead($userId: UUID!) {
+  notifications(where: { userId: { eq: $userId }, isRead: { eq: false } }) {
+    id
+  }
+}
+
+mutation DeleteNotification($id: UUID!) {
+  deleteNotification(id: $id)
+}

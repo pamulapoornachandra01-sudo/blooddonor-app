@@ -1,0 +1,163 @@
+# Blood Request Queries
+query GetBloodRequest($id: UUID!) {
+  bloodRequest(id: $id) {
+    id
+    receiverId
+    receiverName
+    bloodType
+    unitsNeeded
+    location
+    locationDetails
+    urgency
+    medicalProofUrl
+    status
+    createdAt
+    fulfilledAt
+    pledgedDonors
+    hospitalName
+    contactPhone
+  }
+}
+
+query ListBloodRequests {
+  bloodRequests(orderBy: { createdAt: DESC }) {
+    id
+    receiverId
+    receiverName
+    bloodType
+    unitsNeeded
+    location
+    locationDetails
+    urgency
+    medicalProofUrl
+    status
+    createdAt
+    fulfilledAt
+    pledgedDonors
+    hospitalName
+    contactPhone
+  }
+}
+
+query ListBloodRequestsByReceiver($receiverId: UUID!) {
+  bloodRequests(where: { receiverId: { eq: $receiverId } }, orderBy: { createdAt: DESC }) {
+    id
+    receiverId
+    receiverName
+    bloodType
+    unitsNeeded
+    location
+    locationDetails
+    urgency
+    medicalProofUrl
+    status
+    createdAt
+    fulfilledAt
+    pledgedDonors
+    hospitalName
+    contactPhone
+  }
+}
+
+query ListBloodRequestsByBloodType($bloodType: String!) {
+  bloodRequests(where: { bloodType: { eq: $bloodType } }, orderBy: { createdAt: DESC }) {
+    id
+    receiverId
+    receiverName
+    bloodType
+    unitsNeeded
+    location
+    locationDetails
+    urgency
+    medicalProofUrl
+    status
+    createdAt
+    fulfilledAt
+    pledgedDonors
+    hospitalName
+    contactPhone
+  }
+}
+
+query ListBloodRequestsByStatus($status: String!) {
+  bloodRequests(where: { status: { eq: $status } }, orderBy: { createdAt: DESC }) {
+    id
+    receiverId
+    receiverName
+    bloodType
+    unitsNeeded
+    location
+    locationDetails
+    urgency
+    medicalProofUrl
+    status
+    createdAt
+    fulfilledAt
+    pledgedDonors
+    hospitalName
+    contactPhone
+  }
+}
+
+# Blood Request Mutations
+mutation CreateBloodRequest(
+  $receiverId: UUID!,
+  $receiverName: String!,
+  $bloodType: String!,
+  $unitsNeeded: Int!,
+  $location: String!,
+  $locationDetails: String,
+  $urgency: String!,
+  $medicalProofUrl: String,
+  $hospitalName: String,
+  $contactPhone: String
+) {
+  createBloodRequest(data: {
+    receiverId: $receiverId,
+    receiverName: $receiverName,
+    bloodType: $bloodType,
+    unitsNeeded: $unitsNeeded,
+    location: $location,
+    locationDetails: $locationDetails,
+    urgency: $urgency,
+    medicalProofUrl: $medicalProofUrl,
+    hospitalName: $hospitalName,
+    contactPhone: $contactPhone,
+    status: "posted"
+  }) {
+    id
+    receiverId
+    bloodType
+    unitsNeeded
+    status
+    createdAt
+  }
+}
+
+mutation UpdateBloodRequest(
+  $id: UUID!,
+  $status: String,
+  $pledgedDonors: [String],
+  $fulfilledAt: Timestamp
+) {
+  updateBloodRequest(id: $id, data: {
+    status: $status,
+    pledgedDonors: $pledgedDonors,
+    fulfilledAt: $fulfilledAt
+  }) {
+    id
+    status
+    pledgedDonors
+    fulfilledAt
+  }
+}
+
+mutation PledgeDonor($id: UUID!, $donorId: String!) {
+  bloodRequest(id: $id) {
+    pledgedDonors
+  }
+}
+
+mutation DeleteBloodRequest($id: UUID!) {
+  deleteBloodRequest(id: $id)
+}

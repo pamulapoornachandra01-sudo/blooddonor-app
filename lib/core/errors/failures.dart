@@ -40,3 +40,7 @@ class NotFoundFailure extends Failure {
 class CacheFailure extends Failure {
   const CacheFailure([super.message = 'Cache error occurred']);
 }
+
+class FirestoreFailure extends Failure {
+  const FirestoreFailure([super.message = 'Database error occurred']);
+}

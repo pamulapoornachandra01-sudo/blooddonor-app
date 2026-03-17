@@ -1,0 +1,9 @@
+specVersion: "v1"
+serviceId: "blooddonate"
+location: "us-central1"
+
+schema:
+  source: "./schema.gql"
+  
+connectors:
+  source: "./connectors"

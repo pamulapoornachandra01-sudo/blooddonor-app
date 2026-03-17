@@ -1,0 +1,58 @@
+type User @table {
+  id: UUID! @col(name: "id")
+  firebaseUid: String! @col(name: "firebase_uid") @unique
+  phone: String! @col(name: "phone")
+  role: String! @col(name: "role") @default(value: "donor")
+  name: String @col(name: "name")
+  bloodType: String @col(name: "blood_type")
+  verificationStatus: String @col(name: "verification_status") @default(value: "pending")
+  isAvailable: Boolean @col(name: "is_available") @default(value: false)
+  isBanned: Boolean @col(name: "is_banned") @default(value: false)
+  createdAt: Timestamp @col(name: "created_at") @default(value: "now")
+  updatedAt: Timestamp @col(name: "updated_at") @default(value: "now")
+}
+
+type Verification @table {
+  id: UUID! @col(name: "id")
+  userId: UUID! @col(name: "user_id") @unique
+  user: User @relation(fields: [userId], references: [id])
+  idFrontUrl: String @col(name: "id_front_url")
+  idBackUrl: String @col(name: "id_back_url")
+  selfieUrl: String @col(name: "selfie_url")
+  medicalDocUrl: String @col(name: "medical_doc_url")
+  status: String @col(name: "status") @default(value: "pending")
+  rejectionReason: String @col(name: "rejection_reason")
+  submittedAt: Timestamp @col(name: "submitted_at") @default(value: "now")
+  reviewedAt: Timestamp @col(name: "reviewed_at")
+  reviewerId: UUID @col(name: "reviewer_id")
+}
+
+type BloodRequest @table {
+  id: UUID! @col(name: "id")
+  receiverId: UUID! @col(name: "receiver_id")
+  receiver: User @relation(fields: [receiverId], references: [id])
+  receiverName: String @col(name: "receiver_name")
+  bloodType: String! @col(name: "blood_type")
+  unitsNeeded: Int! @col(name: "units_needed")
+  location: String! @col(name: "location")
+  locationDetails: String @col(name: "location_details")
+  urgency: String! @col(name: " urgency") @default(value: "normal")
+  medicalProofUrl: String @col(name: "medical_proof_url")
+  status: String! @col(name: "status") @default(value: "posted")
+  createdAt: Timestamp @col(name: "created_at") @default(value: "now")
+  fulfilledAt: Timestamp @col(name: "fulfilled_at")
+  pledgedDonors: [String] @col(name: "pledged_donors")
+  hospitalName: String @col(name: "hospital_name")
+  contactPhone: String @col(name: "contact_phone")
+}
+
+type Notification @table {
+  id: UUID! @col(name: "id")
+  userId: UUID! @col(name: "user_id")
+  user: User @relation(fields: [userId], references: [id])
+  title: String! @col(name: "title")
+  body: String @col(name: "body")
+  type: String @col(name: "type")
+  isRead: Boolean @col(name: "is_read") @default(value: false)
+  createdAt: Timestamp @col(name: "created_at") @default(value: "now")
+}
